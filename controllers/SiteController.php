@@ -2,124 +2,60 @@
 
 namespace app\controllers;
 
+use app\models\Images;
 use Yii;
-use yii\filters\AccessControl;
+use yii\validators\UrlValidator;
 use yii\web\Controller;
-use yii\filters\VerbFilter;
-use app\models\LoginForm;
-use app\models\ContactForm;
+use yii\web\UploadedFile;
+use linslin\yii2\curl;
+
 
 class SiteController extends Controller
 {
-    /**
-     * @inheritdoc
-     */
-    public function behaviors()
+
+    public function actionFileload()
     {
-        return [
-            'access' => [
-                'class' => AccessControl::className(),
-                'only' => ['logout'],
-                'rules' => [
-                    [
-                        'actions' => ['logout'],
-                        'allow' => true,
-                        'roles' => ['@'],
-                    ],
-                ],
-            ],
-            'verbs' => [
-                'class' => VerbFilter::className(),
-                'actions' => [
-                    'logout' => ['post'],
-                ],
-            ],
-        ];
+        $model = new Images();
+        return $this->render('file',['title'=>'Page load file','model'=>$model]);
     }
 
-    /**
-     * @inheritdoc
-     */
-    public function actions()
-    {
-        return [
-            'error' => [
-                'class' => 'yii\web\ErrorAction',
-            ],
-            'captcha' => [
-                'class' => 'yii\captcha\CaptchaAction',
-                'fixedVerifyCode' => YII_ENV_TEST ? 'testme' : null,
-            ],
-        ];
-    }
+    public function actionAjaxload(){
+        $val = new UrlValidator();
+        $curl = new curl\Curl();
 
-    /**
-     * Displays homepage.
-     *
-     * @return string
-     */
-    public function actionIndex()
-    {
-        return $this->render('index');
-    }
+        //проверяем метод загрузки POST
+        if (Yii::$app->request->post()) {
+            $model_images = new Images();
+            $model_images->load(Yii::$app->request->post());
+            $model_images->file = UploadedFile::getInstance($model_images, 'file');
+            //проверяем тип файла и наличие данного файла во временной директории
+            if ($model_images->file->type == "text/plain" && isset($model_images->file->tempName)) {
+                $handle = @fopen($model_images->file->tempName, "r");
+                if ($handle) {
+                    //получаем строку
 
-    /**
-     * Login action.
-     *
-     * @return string
-     */
-    public function actionLogin()
-    {
-        if (!Yii::$app->user->isGuest) {
-            return $this->goHome();
+                    while (($buffer = fgets($handle, 4096)) !== false && $val->validate($buffer)) {
+                        if (!Images::findOne(['link'=>$buffer])) {
+                            $response = $curl->get($buffer,1);
+                            $img = new Images;
+                            $img->link = $buffer;
+                            $img->extensions = 'jpg';
+                            if ($response) {
+                                if($img->save()) {
+                                    file_put_contents(Yii::getAlias('@app').'/'.Images::IMG_PATH.$img->md.'.jpg',$response);
+                                }
+                            }
+                            unset($img);
+                            unset($ch,$data);
+                        }
+                    }
+                    fclose($handle);
+                }
+                //в случае успеха уведомляем об этом
+                return $this->renderAjax('ajax/_formAjaxmessage',['text' => 'Успех! Данные были загружены', 'class' => 'text-success']);
+            }
         }
-
-        $model = new LoginForm();
-        if ($model->load(Yii::$app->request->post()) && $model->login()) {
-            return $this->goBack();
-        }
-        return $this->render('login', [
-            'model' => $model,
-        ]);
-    }
-
-    /**
-     * Logout action.
-     *
-     * @return string
-     */
-    public function actionLogout()
-    {
-        Yii::$app->user->logout();
-
-        return $this->goHome();
-    }
-
-    /**
-     * Displays contact page.
-     *
-     * @return string
-     */
-    public function actionContact()
-    {
-        $model = new ContactForm();
-        if ($model->load(Yii::$app->request->post()) && $model->contact(Yii::$app->params['adminEmail'])) {
-            Yii::$app->session->setFlash('contactFormSubmitted');
-
-            return $this->refresh();
-        }
-        return $this->render('contact', [
-            'model' => $model,
-        ]);
-    }
-
-    /**
-     * Displays about page.
-     *
-     * @return string
-     */
-    public function actionAbout()
-    {
-        return $this->render('about');
+        //в случае провала уведомляем об этом
+        return $this->renderAjax('ajax/_formAjaxmessage', ['text' => 'Ошибка! Загрузка не была произведена','class'=>'text-danger']);
     }
 }

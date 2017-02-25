@@ -113,3 +113,12 @@ a.desc:after {
 .nav > li > form > button.logout:focus {
     outline: none;
 }
+.load_form {
+    padding-right: 30px;
+}
+.load_input{
+    width: 700px;
+}
+#load_txt{
+    margin-left: 10px;
+}
