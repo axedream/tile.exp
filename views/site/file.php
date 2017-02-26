@@ -46,6 +46,7 @@ $this->title = $title;
             </td>
             <td>
                 <?= Html::submitButton('Загрузить', ['class' => 'btn btn-primary', 'id'=>'load_txt', 'form' => 'mod']); ?>
+                <?= Html::img('@web/img/ajax-loader.gif',['id'=>'ajax_img'])?>
             </td>
         </tr>
         <tr>
